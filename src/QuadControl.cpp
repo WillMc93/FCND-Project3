@@ -198,14 +198,14 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   float velZ_error = velZCmd - velZ;
   float d = kpVelZ * velZ_error;
 
-  // update integratedAltitudeError
-  integratedAltitudeError += posZ_error * dt;
-
   // i-term
-  accel = integratedAltitudeError;
+  integratedAltitudeError += posZ_error * dt;
+  float i = KiPosZ * integratedAltitudeError;
 
+  // calculate total acceleration
+  float accel = (p+i+d+accelZCmd - CONST_GRAVITY) / R(2,2);
 
-
+  thrust = -mass * CONSTRAIN(accel, -maxAscentRate / dt, maxDescentRate / dt);
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
   
