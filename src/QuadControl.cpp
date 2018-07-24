@@ -77,10 +77,10 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
 
   // calculate thrusts from values
   float thrusts[4];
-  thrusts[0] = (x_rot + y_rot + z_rot + collThrustCmd) / 4.f; // front left
-  thrusts[1] = (-x_rot + y_rot - z_rot + collThrustCmd) / 4.f; // front right
-  thrusts[2] = (x_rot - y_rot - z_rot + collThrustCmd)/ 4.f; // rear left
-  thrusts[3] = (-x_rot - y_rot + z_rot + collThrustCmd) / 4.f; // rear right
+  thrusts[0] = (x_rot + y_rot + z_rot + collThrustCmd) / 4.0; // front left
+  thrusts[1] = (-x_rot + y_rot - z_rot + collThrustCmd) / 4.0; // front right
+  thrusts[2] = (x_rot - y_rot - z_rot + collThrustCmd) / 4.0; // rear left
+  thrusts[3] = (-x_rot - y_rot + z_rot + collThrustCmd) / 4.0; // rear right
 
   // contrain and set
   cmd.desiredThrustsN[0] = CONSTRAIN(thrusts[0], minMotorThrust, maxMotorThrust); // front left
@@ -146,10 +146,10 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
   float c_d = -collThrustCmd / mass;
 
   if (collThrustCmd > 0) {
+      // doesn't make sense to refer to these as .x and .y, so array syntax
       float target_R13 = CONSTRAIN(accelCmd[0] / c_d, -maxTiltAngle, maxTiltAngle);
       float target_R23 = CONSTRAIN(accelCmd[1] / c_d, -maxTiltAngle, maxTiltAngle);
 
-      // doesn't make sense to refer to these as pqrCmd.x and pqrCmd.y, so array syntax
       pqrCmd[0] = -R(1,0)*kpBank*(R(0,2) - target_R13) + R(0,0)*kpBank*(R(1,2) - target_R23);
       pqrCmd[1] = -R(1,1)*kpBank*(R(0,2) - target_R13) + R(0,1)*kpBank*(R(1,2) - target_R23);
 
@@ -189,15 +189,23 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   float thrust = 0;
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
-  float posZ_error = posZCmd - posZ; // p-term error
+  // p-term
+  float posZ_error = posZCmd - posZ;
+  float p = kpPosZ * posZ_error;
 
+  // d-term
+  velZCmd = CONSTRAIN(velZCmd, -maxAscentRate, maxDescentRate); // constrain velocity command to possible configs
+  float velZ_error = velZCmd - velZ;
+  float d = kpVelZ * velZ_error;
 
-  float constrained_vel = CONSTRAIN(velZCmd, -maxAscentRate, maxDescentRate); // need to make sure command is possible
-  float vel_error = constrained_vel - velZ; // d-term error
+  // i-term
+  integratedAltitudeError += posZ_error * dt;
+  float i = KiPosZ * integratedAltitudeError;
 
-  integratedAltitudeError += posZ_error*dt; // i-term
+  // calculate total acceleration
+  float accel = (p+i+d+accelZCmd - CONST_GRAVITY) / R(2,2);
 
-  thrust = -(kpPosZ*posZ_error + kpVelZ*vel_error + KiPosZ*integratedAltitudeError + mass*(accelZCmd - CONST_GRAVITY)) / R(2,2);
+  thrust = -mass * CONSTRAIN(accel, -maxAscentRate / dt, maxDescentRate / dt); // should constrain acceleration to possible configs
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
   
@@ -246,11 +254,11 @@ V3F QuadControl::LateralPositionControl(V3F posCmd, V3F velCmd, V3F pos, V3F vel
   V3F pos_error = posCmd - pos; // d-term error
 
   // set and contrain accelCmd
-  accelCmd = kpPosXY*pos_error + kpVelXY*vel_error;
+  accelCmd = kpPosXY*pos_error + kpVelXY*vel_error; // p + d
 
   float accel_norm = sqrtf(accelCmd.x*accelCmd.x + accelCmd.y*accelCmd.y);
   if (accel_norm > maxAccelXY) {
-      accelCmd = accelCmd*maxAccelXY/accel_norm;
+      accelCmd = accelCmd*maxAccelXY/accel_norm; // keep accelCmd within drone's abilities
   }
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
